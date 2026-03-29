@@ -237,6 +237,62 @@
 			<string>Enable Vibration</string>
 		</dict>
 		<dict>
+			<key>PostNotification</key>
+			<string>com.dgh0st.dvirtualhome/settingschanged</string>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>default</key>
+			<false/>
+			<key>defaults</key>
+			<string>com.dgh0st.dvirtualhome</string>
+			<key>key</key>
+			<string>isHapticFeedbackEnabled</string>
+			<key>label</key>
+			<string>Enable Haptic Feedback</string>
+		</dict>
+		<dict>
+			<key>PostNotification</key>
+			<string>com.dgh0st.dvirtualhome/settingschanged</string>
+			<key>cell</key>
+			<string>PSLinkListCell</string>
+			<key>default</key>
+			<integer>1</integer>
+			<key>defaults</key>
+			<string>com.dgh0st.dvirtualhome</string>
+			<key>detail</key>
+			<string>PSListItemsController</string>
+			<key>key</key>
+			<string>hapticFeedbackStrength</string>
+			<key>label</key>
+			<string>Feedback Strength</string>
+			<key>validTitles</key>
+			<array>
+				<string>Light</string>
+				<string>Rigid</string>
+				<string>Crisp</string>
+			</array>
+			<key>validValues</key>
+			<array>
+				<integer>0</integer>
+				<integer>1</integer>
+				<integer>2</integer>
+			</array>
+		</dict>
+		<dict>
+			<key>PostNotification</key>
+			<string>com.dgh0st.dvirtualhome/settingschanged</string>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>default</key>
+			<false/>
+			<key>defaults</key>
+			<string>com.dgh0st.dvirtualhome</string>
+			<key>key</key>
+			<string>isIPhone7GestureFeedbackEnabled</string>
+			<key>label</key>
+			<string>Enable iPhone 7+ Gesture Feedback</string>
+		</dict>
+		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>footerText</key>

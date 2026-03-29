@@ -27,19 +27,33 @@ static void preferencesChanged() {
 		isVibrationEnabled =  [prefs objectForKey:@"isVibrationEnabled"] ? [[prefs objectForKey:@"isVibrationEnabled"] boolValue] : YES;
 		vibrationIntensity =  [prefs objectForKey:@"vibrationIntensity"] ? [[prefs objectForKey:@"vibrationIntensity"] floatValue] : 0.75;
 		vibrationDuration =  [prefs objectForKey:@"vibrationDuration"] ? [[prefs objectForKey:@"vibrationDuration"] intValue] : 30;
+		isHapticFeedbackEnabled = [prefs objectForKey:@"isHapticFeedbackEnabled"] ? [[prefs objectForKey:@"isHapticFeedbackEnabled"] boolValue] : NO;
+		hapticFeedbackStrength = [prefs objectForKey:@"hapticFeedbackStrength"] ? [[prefs objectForKey:@"hapticFeedbackStrength"] intValue] : 1;
+		isIPhone7GestureFeedbackEnabled = [prefs objectForKey:@"isIPhone7GestureFeedbackEnabled"] ? [[prefs objectForKey:@"isIPhone7GestureFeedbackEnabled"] boolValue] : NO;
+		hapticFeedbackStrength = [prefs objectForKey:@"hapticFeedbackStrength"] ? [[prefs objectForKey:@"hapticFeedbackStrength"] intValue] : 1;
 	}
 	[prefs release];
 
 }
 
 static void hapticVibe() {
-	NSMutableDictionary *vibDict = [NSMutableDictionary dictionary];
-	NSMutableArray *vibArr = [NSMutableArray array];
-	[vibArr addObject:[NSNumber numberWithBool:YES]];
-	[vibArr addObject:[NSNumber numberWithInt:vibrationDuration]]; // duration
-	[vibDict setObject:vibArr forKey:@"VibePattern"];
-	[vibDict setObject:[NSNumber numberWithFloat:vibrationIntensity] forKey:@"Intensity"];
-	AudioServicesPlaySystemSoundWithVibration(kSystemSoundID_Vibrate, nil, vibDict);
+	if(!isHapticFeedbackEnabled) {
+		NSMutableDictionary *vibDict = [NSMutableDictionary dictionary];
+		NSMutableArray *vibArr = [NSMutableArray array];
+		[vibArr addObject:[NSNumber numberWithBool:YES]];
+		[vibArr addObject:[NSNumber numberWithInt:vibrationDuration]]; // duration
+		[vibDict setObject:vibArr forKey:@"VibePattern"];
+		[vibDict setObject:[NSNumber numberWithFloat:vibrationIntensity] forKey:@"Intensity"];
+		AudioServicesPlaySystemSoundWithVibration(kSystemSoundID_Vibrate, nil, vibDict);
+	} else {
+		if (hapticFeedbackStrength == 0) {
+			AudioServicesPlaySystemSound(1519); // Light
+		} else if (hapticFeedbackStrength == 1) {
+			AudioServicesPlaySystemSound(1520); // Rigid
+		} else if (hapticFeedbackStrength == 2){
+			AudioServicesPlaySystemSound(1521); // Crisp
+		}
+	}
 }
 
 // iOS 13+ doesn't currently support disable actions during lockscreen biometric authentication
@@ -278,6 +292,7 @@ static NSString *currentApplicationIdentifier = nil;
 	}
 }
 
+// 注：这里的 doubleTapUp 只有在“便捷访问”开启时才可以被 hook 到，否则不生效
 -(void)doubleTapUp:(id)arg1 {
 	if (isEnabled) {
 		[self performAction:doubleTapAction];
@@ -289,20 +304,29 @@ static NSString *currentApplicationIdentifier = nil;
 %new
 -(void)singleTapUp:(id)arg1 {
 	if (isEnabled) {
+		if (isIPhone7GestureFeedbackEnabled) {
+			hapticVibe();
+		}
 		[self performAction:singleTapAction];
 	}
 }
 
 %new
 -(void)longTap:(UILongPressGestureRecognizer *)arg1 {
-	if (isEnabled && arg1.state == UIGestureRecognizerStateBegan && !isLongPressGestureActive) {
-		[self performAction:longHoldAction];
-
-		// reset the gesture so home button presses can be detected
-		ResetGestureRecognizers([self gestureRecognizerConfiguration]);
+	if (isEnabled && !isLongPressGestureActive) {
+		if (!isIPhone7GestureFeedbackEnabled && arg1.state == UIGestureRecognizerStateBegan) {
+			[self performAction:longHoldAction];
+			// reset the gesture so home button presses can be detected
+			ResetGestureRecognizers([self gestureRecognizerConfiguration]);
+			isLongPressGestureActive = YES;
+		} else if (isIPhone7GestureFeedbackEnabled && (arg1.state == UIGestureRecognizerStateEnded || arg1.state == UIGestureRecognizerStateRecognized)) {
+			hapticVibe();
+			[self performAction:longHoldAction];
+			// reset the gesture so home button presses can be detected
+			ResetGestureRecognizers([self gestureRecognizerConfiguration]);
+			isLongPressGestureActive = YES;
+		}
 	}
-
-	isLongPressGestureActive = YES;
 }
 
 %new
