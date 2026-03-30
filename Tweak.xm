@@ -30,29 +30,56 @@ static void preferencesChanged() {
 		isHapticFeedbackEnabled = [prefs objectForKey:@"isHapticFeedbackEnabled"] ? [[prefs objectForKey:@"isHapticFeedbackEnabled"] boolValue] : NO;
 		hapticFeedbackStrength = [prefs objectForKey:@"hapticFeedbackStrength"] ? [[prefs objectForKey:@"hapticFeedbackStrength"] intValue] : 1;
 		isIPhone7GestureFeedbackEnabled = [prefs objectForKey:@"isIPhone7GestureFeedbackEnabled"] ? [[prefs objectForKey:@"isIPhone7GestureFeedbackEnabled"] boolValue] : NO;
+		customDoubleTapInterval = [prefs objectForKey:@"customDoubleTapInterval"] ? [[prefs objectForKey:@"customDoubleTapInterval"] floatValue] : 0.15;
 		hapticFeedbackStrength = [prefs objectForKey:@"hapticFeedbackStrength"] ? [[prefs objectForKey:@"hapticFeedbackStrength"] intValue] : 1;
 	}
 	[prefs release];
 
 }
 
+// ==============
+// System Sound Haptic Feedback
+// ==============
+#import <AudioToolbox/AudioToolbox.h>
+static CFAbsoluteTime lastHapticTime = 0;
+
 static void hapticVibe() {
 	if(!isHapticFeedbackEnabled) {
 		NSMutableDictionary *vibDict = [NSMutableDictionary dictionary];
 		NSMutableArray *vibArr = [NSMutableArray array];
+		
 		[vibArr addObject:[NSNumber numberWithBool:YES]];
-		[vibArr addObject:[NSNumber numberWithInt:vibrationDuration]]; // duration
+		[vibArr addObject:[NSNumber numberWithInt:vibrationDuration]];
+		
 		[vibDict setObject:vibArr forKey:@"VibePattern"];
 		[vibDict setObject:[NSNumber numberWithFloat:vibrationIntensity] forKey:@"Intensity"];
 		AudioServicesPlaySystemSoundWithVibration(kSystemSoundID_Vibrate, nil, vibDict);
 	} else {
 		if (hapticFeedbackStrength == 0) {
-			AudioServicesPlaySystemSound(1519); // Light
+			AudioServicesPlaySystemSound(1519);
 		} else if (hapticFeedbackStrength == 1) {
-			AudioServicesPlaySystemSound(1520); // Rigid
-		} else if (hapticFeedbackStrength == 2){
-			AudioServicesPlaySystemSound(1521); // Crisp
+			AudioServicesPlaySystemSound(1520);
+		} else {
+			AudioServicesPlaySystemSound(1521);
 		}
+	}
+}
+
+// 防吞音定制版回振
+static void safeHapticVibe() {
+	CFAbsoluteTime now = CFAbsoluteTimeGetCurrent();
+	// 经测算，系统 AudioServices 对于同一音效 ID 的连续播放，防重截断间歇约为 0.12 秒
+	double minimumClearance = 0.12; 
+	if (now - lastHapticTime < minimumClearance) {
+		// 间隔太短马达没恢复！我们将这第二下回响智能推迟到马达冷却好的这零点零几秒之后，确保它一定会震动！
+		double delayNeeded = minimumClearance - (now - lastHapticTime);
+		dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delayNeeded * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+			hapticVibe();
+		});
+		lastHapticTime = now + delayNeeded;
+	} else {
+		lastHapticTime = now;
+		hapticVibe();
 	}
 }
 
@@ -292,20 +319,28 @@ static NSString *currentApplicationIdentifier = nil;
 	}
 }
 
-// 注：这里的 doubleTapUp 只有在“便捷访问”开启时才可以被 hook 到，否则不生效
+// 禁用“便捷访问”
 -(void)doubleTapUp:(id)arg1 {
-	if (isEnabled) {
-		[self performAction:doubleTapAction];
-	} else {
+	if (!isEnabled) {
 		%orig(arg1);
 	}
 }
 
+static NSTimer *manualDoubleTapTimer = nil;
+static int manualTapCount = 0;
+
 %new
--(void)singleTapUp:(id)arg1 {
-	if (isEnabled) {
+-(void)executeSingleTap {
+	if (manualDoubleTapTimer) {
+		[manualDoubleTapTimer invalidate];
+		[manualDoubleTapTimer release];
+		manualDoubleTapTimer = nil;
+	}
+	
+	if (manualTapCount == 1) {
+		manualTapCount = 0;
 		if (isIPhone7GestureFeedbackEnabled) {
-			hapticVibe();
+			safeHapticVibe();
 		}
 		[self performAction:singleTapAction];
 	}
@@ -313,20 +348,28 @@ static NSString *currentApplicationIdentifier = nil;
 
 %new
 -(void)longTap:(UILongPressGestureRecognizer *)arg1 {
-	if (isEnabled && !isLongPressGestureActive) {
-		if (!isIPhone7GestureFeedbackEnabled && arg1.state == UIGestureRecognizerStateBegan) {
-			[self performAction:longHoldAction];
-			// reset the gesture so home button presses can be detected
-			ResetGestureRecognizers([self gestureRecognizerConfiguration]);
+	if (!isEnabled) return;
+
+	if (arg1.state == UIGestureRecognizerStateBegan) {
+		if (!isLongPressGestureActive){
 			isLongPressGestureActive = YES;
-		} else if (isIPhone7GestureFeedbackEnabled && (arg1.state == UIGestureRecognizerStateEnded || arg1.state == UIGestureRecognizerStateRecognized)) {
-			hapticVibe();
-			[self performAction:longHoldAction];
-			// reset the gesture so home button presses can be detected
-			ResetGestureRecognizers([self gestureRecognizerConfiguration]);
-			isLongPressGestureActive = YES;
+			if (!isIPhone7GestureFeedbackEnabled) {
+				[self performAction:longHoldAction];
+				// reset the gesture so home button presses can be detected
+				ResetGestureRecognizers([self gestureRecognizerConfiguration]);
+			}
+		}
+	} else if (arg1.state == UIGestureRecognizerStateEnded || arg1.state == UIGestureRecognizerStateRecognized) {
+		if (isLongPressGestureActive) {
+			if (isIPhone7GestureFeedbackEnabled) {
+				if (isVibrationEnabled) safeHapticVibe();
+				[self performAction:longHoldAction];
+				// reset the gesture so home button presses can be detected
+				ResetGestureRecognizers([self gestureRecognizerConfiguration]);
+			}
 		}
 	}
+	
 }
 
 %new
@@ -343,41 +386,67 @@ static NSString *currentApplicationIdentifier = nil;
 
 %new
 -(void)vibrationTap:(UILongPressGestureRecognizer *)arg1 {
-	// taking advantage of the fact that vibration will be recognzied as soon as finger is on sensor
-	isLongPressGestureActive = NO;
+	if (arg1.state == UIGestureRecognizerStateBegan) {
+		// 第一次手指按下
+		isLongPressGestureActive = NO;
+		if (isEnabled && isVibrationEnabled) {
+			lastHapticTime = CFAbsoluteTimeGetCurrent(); // 刷新按下第一震的时间刻度
+			hapticVibe();
+		}
+		
+		if (manualTapCount == 1) {
+			// 第二次手指按下，暂停第一次按下的 singleTap 计时器，防止触发
+			if (manualDoubleTapTimer) {
+				[manualDoubleTapTimer invalidate];
+				[manualDoubleTapTimer release];
+				manualDoubleTapTimer = nil;
+			}
+		}
+	} else if (arg1.state == UIGestureRecognizerStateEnded) {
+		if (isLongPressGestureActive) {
+			// 手指离开，但是检测到长按，manualTapCount 归 0 并返回
+			manualTapCount = 0;
+			return;
+		}
 
-	if (isEnabled && isVibrationEnabled && arg1.state == UIGestureRecognizerStateBegan) {
-		hapticVibe();
+		manualTapCount++;
+		
+		if (manualTapCount == 1) {
+			// 第一次手指离开
+			if (customDoubleTapInterval <= 0.01) {
+				// 绝对0秒无迟滞秒开模式（不考虑双击）
+				manualTapCount = 0;
+				if (isHapticFeedbackEnabled) safeHapticVibe();
+				[self performAction:singleTapAction];
+			} else {
+				// 普通安全模式，启动倒计时
+				manualDoubleTapTimer = [NSTimer scheduledTimerWithTimeInterval:customDoubleTapInterval target:self selector:@selector(executeSingleTap) userInfo:nil repeats:NO];
+				[manualDoubleTapTimer retain];
+			}
+		} else if (manualTapCount >= 2) {
+			// 第二次手指离开
+			manualTapCount = 0;
+			if (isHapticFeedbackEnabled) {
+				safeHapticVibe();
+			}
+			[self performAction:doubleTapAction];
+		}
+	} else if (arg1.state == UIGestureRecognizerStateCancelled || arg1.state == UIGestureRecognizerStateFailed) {
+		manualTapCount = 0;
+		if (manualDoubleTapTimer) {
+			[manualDoubleTapTimer invalidate];
+			[manualDoubleTapTimer release];
+			manualDoubleTapTimer = nil;
+		}
 	}
 }
 
 %new
 -(void)createSingleTapGestureRecognizerWithConfiguration:(SBHomeHardwareButtonGestureRecognizerConfiguration *)arg1 {
+	// 苹果系统这套原封不动的挂载已经被咱们彻底拆台抛弃！不再注入系统手势链。
+	// 这里顺带切断那个会干扰咱们自己手动判点的原本双压响应手势！
 	SBHBDoubleTapUpGestureRecognizer *_doubleTapUpGestureRecognizer = [arg1 doubleTapUpGestureRecognizer];
-	SBSystemGestureManager *_systemGestureManager = [arg1 systemGestureManager];
-
-	SBHBDoubleTapUpGestureRecognizer *_singleTapGestureRecognizer = [[%c(SBHBDoubleTapUpGestureRecognizer) alloc] initWithTarget:self action:@selector(singleTapUp:)];
-	[_singleTapGestureRecognizer setDelegate:self];
-	[_singleTapGestureRecognizer requireGestureRecognizerToFail:arg1.longTapGestureRecognizer];
-	[_singleTapGestureRecognizer requireGestureRecognizerToFail:arg1.tapAndHoldTapGestureRecognizer];
-	[_singleTapGestureRecognizer requireGestureRecognizerToFail:_doubleTapUpGestureRecognizer];
-	[_singleTapGestureRecognizer requireGestureRecognizerToFail:arg1.initialButtonDownGestureRecognizer];
-	[_singleTapGestureRecognizer setAllowedPressTypes:[_doubleTapUpGestureRecognizer allowedPressTypes]];
-	[_singleTapGestureRecognizer setClickCount:1];
-
-	if (%c(FBSystemGestureManager)) {
-		FBSystemGestureManager *_fbSystemGestureManager = [%c(FBSystemGestureManager) sharedInstance];
-		if ([_fbSystemGestureManager respondsToSelector:@selector(addGestureRecognizer:toDisplayWithIdentity:)])
-			[_fbSystemGestureManager addGestureRecognizer:_singleTapGestureRecognizer toDisplayWithIdentity:MSHookIvar<id>(_systemGestureManager, "_displayIdentity")];
-		else if ([_fbSystemGestureManager respondsToSelector:@selector(addGestureRecognizer:toDisplay:)])
-			[_fbSystemGestureManager addGestureRecognizer:_singleTapGestureRecognizer toDisplay:[_systemGestureManager display]];
-	} else {
-		[[%c(_UISystemGestureManager) sharedInstance] addGestureRecognizer:_singleTapGestureRecognizer toDisplayWithIdentity:MSHookIvar<id>(_systemGestureManager, "_displayIdentity")];
-	}
-
-	if (arg1.singleTapGestureRecognizer != nil)
-		[arg1.singleTapGestureRecognizer release];
-	arg1.singleTapGestureRecognizer = _singleTapGestureRecognizer;
+	_doubleTapUpGestureRecognizer.enabled = NO; 
 }
 
 %new

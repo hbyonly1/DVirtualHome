@@ -37,6 +37,7 @@ static NSInteger vibrationDuration = 30;
 static BOOL isHapticFeedbackEnabled = NO;
 static NSInteger hapticFeedbackStrength = 1;
 static BOOL isIPhone7GestureFeedbackEnabled = NO;
+static CGFloat customDoubleTapInterval = 0.15;
 
 @interface SBMainSwitcherViewController : UIViewController
 + (id)sharedInstance;
