@@ -32,6 +32,7 @@ static void preferencesChanged() {
 		isIPhone7GestureFeedbackEnabled = [prefs objectForKey:@"isIPhone7GestureFeedbackEnabled"] ? [[prefs objectForKey:@"isIPhone7GestureFeedbackEnabled"] boolValue] : NO;
 		customDoubleTapInterval = [prefs objectForKey:@"customDoubleTapInterval"] ? [[prefs objectForKey:@"customDoubleTapInterval"] floatValue] : 0.15;
 		hapticFeedbackStrength = [prefs objectForKey:@"hapticFeedbackStrength"] ? [[prefs objectForKey:@"hapticFeedbackStrength"] intValue] : 1;
+		isPhysicalHomeDisabled = [prefs objectForKey:@"isPhysicalHomeDisabled"] ? [[prefs objectForKey:@"isPhysicalHomeDisabled"] boolValue] : NO;
 	}
 	[prefs release];
 
@@ -319,6 +320,22 @@ static NSString *currentApplicationIdentifier = nil;
 	}
 }
 
+// 拦截物理 HOME 键的按压动作！
+-(void)singlePressUp:(id)arg1 {
+	if (isEnabled && isPhysicalHomeDisabled) return; 
+	%orig;
+}
+
+-(void)doublePressDown:(id)arg1 {
+	if (isEnabled && isPhysicalHomeDisabled) return;
+	%orig;
+}
+
+-(void)doublePressUp:(id)arg1 {
+	if (isEnabled && isPhysicalHomeDisabled) return;
+	%orig;
+}
+
 // 禁用“便捷访问”
 -(void)doubleTapUp:(id)arg1 {
 	if (!isEnabled) {
@@ -386,6 +403,7 @@ static int manualTapCount = 0;
 
 %new
 -(void)vibrationTap:(UILongPressGestureRecognizer *)arg1 {
+	if (!isEnabled) return;
 	if (arg1.state == UIGestureRecognizerStateBegan) {
 		// 第一次手指按下
 		isLongPressGestureActive = NO;
