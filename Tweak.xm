@@ -32,6 +32,7 @@ static void preferencesChanged() {
 		isIPhone7GestureFeedbackEnabled = [prefs objectForKey:@"isIPhone7GestureFeedbackEnabled"] ? [[prefs objectForKey:@"isIPhone7GestureFeedbackEnabled"] boolValue] : NO;
 		customDoubleTapInterval = [prefs objectForKey:@"customDoubleTapInterval"] ? [[prefs objectForKey:@"customDoubleTapInterval"] floatValue] : 0.15;
 		hapticFeedbackStrength = [prefs objectForKey:@"hapticFeedbackStrength"] ? [[prefs objectForKey:@"hapticFeedbackStrength"] intValue] : 1;
+		vibrationInterval = [prefs objectForKey:@"vibrationInterval"] ? [[prefs objectForKey:@"vibrationInterval"] floatValue] : 0.15;
 		isPhysicalHomeDisabled = [prefs objectForKey:@"isPhysicalHomeDisabled"] ? [[prefs objectForKey:@"isPhysicalHomeDisabled"] boolValue] : NO;
 	}
 	[prefs release];
@@ -45,7 +46,8 @@ static void preferencesChanged() {
 static CFAbsoluteTime lastHapticTime = 0;
 
 static void hapticVibe() {
-	if(!isHapticFeedbackEnabled) {
+	if (!isVibrationEnabled) return;
+	if (!isHapticFeedbackEnabled) {
 		NSMutableDictionary *vibDict = [NSMutableDictionary dictionary];
 		NSMutableArray *vibArr = [NSMutableArray array];
 		
@@ -66,13 +68,13 @@ static void hapticVibe() {
 	}
 }
 
-// 防吞音定制版回振
+// 为了防止去抖导致震动不生效的主动延迟器
 static void safeHapticVibe() {
 	CFAbsoluteTime now = CFAbsoluteTimeGetCurrent();
-	// 经测算，系统 AudioServices 对于同一音效 ID 的连续播放，防重截断间歇约为 0.12 秒
-	double minimumClearance = 0.12; 
+	// 延迟间隔
+	double minimumClearance = vibrationInterval; 
 	if (now - lastHapticTime < minimumClearance) {
-		// 间隔太短马达没恢复！我们将这第二下回响智能推迟到马达冷却好的这零点零几秒之后，确保它一定会震动！
+		// 将第二次震动推迟到间隔以后
 		double delayNeeded = minimumClearance - (now - lastHapticTime);
 		dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delayNeeded * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
 			hapticVibe();
@@ -356,7 +358,7 @@ static int manualTapCount = 0;
 	
 	if (manualTapCount == 1) {
 		manualTapCount = 0;
-		if (isIPhone7GestureFeedbackEnabled) {
+		if (isIPhone7GestureFeedbackEnabled && isVibrationEnabled) {
 			safeHapticVibe();
 		}
 		[self performAction:singleTapAction];
@@ -434,7 +436,7 @@ static int manualTapCount = 0;
 			if (customDoubleTapInterval <= 0.01) {
 				// 绝对0秒无迟滞秒开模式（不考虑双击）
 				manualTapCount = 0;
-				if (isHapticFeedbackEnabled) safeHapticVibe();
+				if (isHapticFeedbackEnabled && isVibrationEnabled) safeHapticVibe();
 				[self performAction:singleTapAction];
 			} else {
 				// 普通安全模式，启动倒计时
@@ -444,7 +446,7 @@ static int manualTapCount = 0;
 		} else if (manualTapCount >= 2) {
 			// 第二次手指离开
 			manualTapCount = 0;
-			if (isHapticFeedbackEnabled) {
+			if (isHapticFeedbackEnabled && isVibrationEnabled) {
 				safeHapticVibe();
 			}
 			[self performAction:doubleTapAction];

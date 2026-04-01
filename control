@@ -1,9 +1,9 @@
 Package: com.dgh0st.dvirtualhome
 Name: DVirtualHome
 Depends: mobilesubstrate, preferenceloader
-Version: 0.0.31
+Version: 0.0.32
 Architecture: iphoneos-arm
-Description: A Virtual Home Tweak only tested in iOS 14.5.
+Description: A Virtual Home Tweak only tested in iOS 14.5, theoretically supports iOS 10-15.
 Maintainer: DGh0st <deeppwnage@yahoo.com>
 Author: DGh0st <deeppwnage@yahoo.com>
 Section: Tweaks
